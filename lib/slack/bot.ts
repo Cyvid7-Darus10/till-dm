@@ -226,7 +226,8 @@ export async function finishApproval(approved: ApprovedInvoice): Promise<void> {
       throw new Error('an approval card could not be closed');
     }
     const result = await createInvoice(approved);
-    if (!result.ok) log.warn('invoice not created', { requestId: pending.requestId, problem: result.problem });
+    // The problem text can name clients and amounts, so only the id goes to the logs.
+    if (!result.ok) log.warn('invoice not created', { requestId: pending.requestId });
     const toApprover = result.ok ? COPY.created(result.number, pending.client.name, result.url) : COPY.notCreated(result.problem);
     await postTo(approverDm, toApprover, approver.name);
     if (requesterIsApprover) return;
