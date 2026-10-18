@@ -1,0 +1,47 @@
+{
+  "name": "till-dm",
+  "version": "1.0.0",
+  "description": "Till in DMs: a private finance agent in Slack. The finance team asks, an admin approves, and Airwallex logins stay in Vercel Connect.",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
+    "check": "npm run typecheck && npm run lint && npm run coverage",
+    "check-logins": "tsx --env-file=.env.local scripts/check-logins.ts",
+    "seed": "tsx --env-file=.env.local scripts/seed-sandbox.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/mcp": "^1.0.95",
+    "@chat-adapter/slack": "^4.42.0",
+    "@chat-adapter/state-memory": "^4.42.0",
+    "@vercel/connect": "^2.5.2",
+    "@vercel/kms": "^0.3.4",
+    "ai": "^6.0.307",
+    "chat": "^4.42.0",
+    "jose": "^6.2.12",
+    "next": "^16.4.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.15",
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@vitest/coverage-v8": "^4.1.11",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  }
+}
