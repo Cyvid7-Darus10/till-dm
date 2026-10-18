@@ -2,10 +2,13 @@ import { after } from 'next/server';
 import { verifyLoginLink } from '@/lib/airwallex/login-link';
 import { COPY } from '@/lib/copy';
 import { log } from '@/lib/log';
-import { approverConnected, CALLBACK_PARAM, finishApproval, teamLoginConnected } from '@/lib/slack/bot';
+import { CALLBACK_PARAM, checkApproval, finishApproval, teamLoginConnected } from '@/lib/slack/bot';
 
-// The Airwallex sign-in returns here. Team login: confirm it. Approver login: the signed link
-// carries the approved invoice, so create it once the login is connected.
+// The model and Airwallex work runs after the response; give it room to finish.
+export const maxDuration = 300;
+
+// The Airwallex sign-in returns here. Team login: confirm it. Approver login: the signed link carries
+// the approval, so create the invoice, unless the request was decided in Slack meanwhile.
 
 export async function GET(request: Request): Promise<Response> {
   const params = new URL(request.url).searchParams;
@@ -14,9 +17,11 @@ export async function GET(request: Request): Promise<Response> {
   if (!approved) return page(COPY.page.invalidLink, 400);
   const requestId = approved.pending.requestId;
   try {
-    if (!(await approverConnected(approved))) return page(COPY.page.notConnectedYet, 409);
+    const state = await checkApproval(approved);
+    if (state === 'not-connected') return page(COPY.page.notConnectedYet, 409);
+    if (state !== 'ready') return page(COPY.page.alreadyDecided, 409);
     // Creating takes a while; the page answers now and Till reports in Slack.
-    after(() => finishApproval(approved).catch((error: unknown) => log.error('failed to finish approval', { requestId, error })));
+    after(() => finishApproval(approved));
     return page(COPY.page.creating);
   } catch (error: unknown) {
     log.error('failed to resume after Airwallex login', { requestId, error });

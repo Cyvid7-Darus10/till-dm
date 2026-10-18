@@ -17,14 +17,17 @@ export const COPY = {
   sentForApproval: (client: string, amount: string, admins: string) =>
     `I've asked ${admins} to approve an invoice for ${plainText(client)}, ${amount}. I'll message you here when it's decided.`,
   notCreated: (problem: string) => `I didn't create the invoice. ${plainText(problem)}`,
+  tooLong: 'That request is too long for an approval card. Ask again with a shorter description.',
+  notSent: "I couldn't send this request to every admin, so I cancelled it. Ask again in a moment.",
+  cancelledNotSent: 'Cancelled: not every admin received this request.',
   approved: (adminName: string) => `Approved by ${plainText(adminName)}.`,
   declined: (adminName: string) => `Declined by ${plainText(adminName)}.`,
   /** To the requester. */
   requestDeclined: (adminName: string, client: string) => `${plainText(adminName)} declined your invoice request for ${plainText(client)}.`,
   requestApproved: (adminName: string, number: string, client: string, url: string) =>
     `${plainText(adminName)} approved your request. Created invoice ${plainText(number)} for ${plainText(client)}.${createdLink(url)}`,
-  requestFailed: (adminName: string, problem: string) =>
-    `${plainText(adminName)} approved your request, but I didn't create the invoice. ${plainText(problem)}`,
+  requestFailed: (adminName: string) =>
+    `${plainText(adminName)} approved your request, but I didn't create the invoice. ${plainText(adminName)} has the details.`,
   /** To the admin who approved. */
   created: (number: string, client: string, url: string) =>
     `Created invoice ${plainText(number)} for ${plainText(client)}.${createdLink(url)}`,
@@ -34,7 +37,8 @@ export const COPY = {
     amount: 'Amount',
     terms: 'Terms',
     termsValue: (days: number) => `Net ${days}`,
-    requestedBy: (name: string) => `Requested by ${plainText(name)}. Approving creates it with your own Airwallex login.`,
+    /** `requester` is Slack mention markup built from a validated user id. */
+    requestedBy: (requester: string) => `Requested by ${requester}. Approving creates it with your own Airwallex login.`,
     approve: 'Approve',
     decline: 'Decline',
   },
@@ -53,6 +57,7 @@ export const COPY = {
     creating: 'Airwallex is connected. Till is creating the invoice now. Go back to Slack to see it.',
     notConnectedYet: 'Airwallex is not connected yet. Try the button in Slack again.',
     invalidLink: 'That link is not valid or has expired. Press Approve in Slack again.',
+    alreadyDecided: 'This request was already decided in Slack, so nothing was created.',
     failed: 'Something went wrong. Go back to Slack and try again.',
   },
 } as const;

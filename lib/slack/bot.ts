@@ -13,15 +13,19 @@ import { config, isFinanceAdmin, isFinanceMember } from '../config';
 import { COPY } from '../copy';
 import { type CustomerMatch, findCustomer } from '../invoices/customer-match';
 import {
+  type ApprovalCardRef,
   type ApprovedInvoice,
+  channelOf,
   checkDecision,
   decodePending,
+  fitsInButton,
   formatAmount,
   type InvoiceRequest,
   type PendingInvoice,
   requestIdFor,
 } from '../invoices/request';
 import { log } from '../log';
+import { hasButtons } from './card-state';
 import { ACTIONS, approvalCard, connectCard, reply, resolvedCard } from './cards';
 import { plainText } from './text';
 
@@ -29,21 +33,21 @@ import { plainText } from './text';
 export const CALLBACK_PATH = '/api/airwallex/connected';
 export const CALLBACK_PARAM = { token: 't', team: 'team' } as const;
 
-// No database: memory state only covers dedupe and locks within one instance.
-// Everything Till needs to remember travels in button values and signed links.
+// No database: memory state only covers dedupe and locks within one instance. Everything Till needs to
+// remember travels in button values and signed links, and a card's buttons show whether it is decided.
 export const bot = new Chat({
   userName: 'Till',
   adapters: { slack: createSlackAdapter({ ...connectSlackAdapter(config.slackConnector), userName: 'Till' }) },
   state: createMemoryState(),
 }).registerSingleton();
 
+const slack = () => bot.getAdapter('slack');
+
 const displayName = (author: Author): string => author.fullName || author.userName;
 
 /** Recent messages in this DM, with each person's name in front, for the model. */
 async function dmHistory(thread: Thread) {
-  const fetchChannelMessages = thread.adapter.fetchChannelMessages?.bind(thread.adapter);
-  if (!fetchChannelMessages) throw new Error('the Slack adapter cannot read DM history');
-  const { messages } = await fetchChannelMessages(thread.channelId, { limit: config.historyLimit });
+  const { messages } = await slack().fetchChannelMessages(thread.channelId, { limit: config.historyLimit });
   return toAiMessages(messages, {
     transformMessage: (ai, source) =>
       ai.role === 'user' && typeof ai.content === 'string' ? { ...ai, content: `[${displayName(source.author)}] ${ai.content}` } : ai,
@@ -67,8 +71,46 @@ async function resolveClient(request: InvoiceRequest): Promise<CustomerMatch> {
   }
 }
 
-const editCard = (card: PendingInvoice['cards'][number], content: ReturnType<typeof approvalCard>) =>
-  bot.getAdapter('slack').editMessage(card.threadId, card.messageId, content);
+// A card is a top-level DM message, so its own timestamp is also its thread.
+const cardThreadId = (card: ApprovalCardRef): string => `slack:${card.channel}:${card.messageId}`;
+
+const editCard = (card: ApprovalCardRef, content: ReturnType<typeof approvalCard>) =>
+  slack().editMessage(cardThreadId(card), card.messageId, content);
+
+/** True while a card still shows its buttons, meaning nobody has decided on it yet. */
+async function isOpen(card: ApprovalCardRef): Promise<boolean> {
+  const message = await slack().fetchMessage(cardThreadId(card), card.messageId);
+  return message !== null && hasButtons(message.raw);
+}
+
+const allOpen = async (pending: PendingInvoice): Promise<boolean> => (await Promise.all(pending.cards.map(isOpen))).every(Boolean);
+
+/** Replaces every card with `content`. Returns false if any edit failed, so that card may still be live. */
+async function editCards(cards: readonly ApprovalCardRef[], content: ReturnType<typeof resolvedCard>): Promise<boolean> {
+  const results = await Promise.allSettled(cards.map((card) => editCard(card, content)));
+  const failed = results.filter((result) => result.status === 'rejected');
+  for (const result of failed) log.warn('failed to close an approval card', { error: result.reason });
+  return failed.length === 0;
+}
+
+/** Posts one card per approver. All or nothing: if any card fails, the ones that went out are cancelled. */
+async function postCards(draft: PendingInvoice, approvers: readonly string[]): Promise<PendingInvoice | null> {
+  const posted = await Promise.allSettled(
+    approvers.map(async (adminId): Promise<ApprovalCardRef> => {
+      const dm = await bot.openDM(adminId);
+      const sent = await dm.post(approvalCard(draft));
+      return { channel: channelOf(dm.id), messageId: sent.id };
+    }),
+  );
+  const cards = posted.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : []));
+  // Each card's buttons now list every card, so the first decision can close the rest.
+  const pending: PendingInvoice = { ...draft, cards };
+  const edited = cards.length === approvers.length && (await editCards(cards, approvalCard(pending)));
+  if (edited) return pending;
+  log.error('failed to send every approval card', { requestId: draft.requestId, sent: cards.length, wanted: approvers.length });
+  await editCards(cards, resolvedCard(pending, COPY.cancelledNotSent));
+  return null;
+}
 
 /**
  * Someone asked for an invoice. Till resolves the exact client, then sends an approval card to every
@@ -89,16 +131,15 @@ async function requestApproval(thread: Thread, message: Message, request: Invoic
     cards: [],
   };
   const approvers = isFinanceAdmin(requester.userId) ? [requester.userId] : config.financeAdminSlackIds;
-  const cards = await Promise.all(
-    approvers.map(async (adminId) => {
-      const dm = await bot.openDM(adminId);
-      const sent = await dm.post(approvalCard(draft));
-      return { threadId: dm.id, messageId: sent.id };
-    }),
-  );
-  // Each card's buttons now list every card, so the first decision can close the rest.
-  const pending: PendingInvoice = { ...draft, cards };
-  await Promise.all(cards.map((card) => editCard(card, approvalCard(pending))));
+  if (!fitsInButton(draft, approvers.length)) {
+    await thread.post(COPY.tooLong);
+    return;
+  }
+  const pending = await postCards(draft, approvers);
+  if (!pending) {
+    await thread.post(COPY.notSent);
+    return;
+  }
   if (isFinanceAdmin(requester.userId)) return;
   const admins = approvers.map((id) => thread.mentionUser(id)).join(', ');
   await thread.post(reply(COPY.sentForApproval(pending.client.name, formatAmount(request), admins), COPY.teamLoginLabel));
@@ -121,7 +162,7 @@ async function noAccess(thread: Thread, author: Author): Promise<void> {
 bot.onDirectMessage(async (thread, message) => {
   const author = message.author;
   if (!isFinanceMember(author.userId)) {
-    log.info('ignored a DM from someone outside the finance team', { userId: author.userId });
+    log.info('turned away a DM from outside the finance team', { userId: author.userId });
     await thread.post(COPY.notOnTeam);
     return;
   }
@@ -153,44 +194,51 @@ export async function teamLoginConnected(): Promise<boolean> {
   return isConnected(forQuestions(), SCOPES.questions);
 }
 
-/** Replaces every approval card for this request with its outcome. One failed edit doesn't stop the rest. */
-async function closeCards(pending: PendingInvoice, outcome: string): Promise<void> {
-  const results = await Promise.allSettled(pending.cards.map((card) => editCard(card, resolvedCard(pending, outcome))));
-  for (const result of results) {
-    if (result.status === 'rejected') log.warn('failed to close an approval card', { error: result.reason });
-  }
-}
-
 const postTo = async (threadId: string, text: string, who: string): Promise<void> => {
   await bot.thread(threadId).post(reply(text, who));
 };
 
-/** Creates the approved invoice with the approver's login and tells the approver and the requester. */
+export type ApprovalState = 'ready' | 'not-connected' | 'not-admin' | 'decided';
+
+/**
+ * Whether an approval can go ahead now: the approver is still an admin, their own Airwallex login is
+ * connected, and every card is still open. Called on Approve and by the login callback.
+ */
+export async function checkApproval({ pending, approver }: ApprovedInvoice): Promise<ApprovalState> {
+  // The login callback runs from a browser, not a Slack event, so the adapter may not be set up yet.
+  await bot.initialize();
+  if (!isFinanceAdmin(approver.id)) return 'not-admin';
+  if (!(await allOpen(pending))) return 'decided';
+  return (await isConnected(forCreating(approver.id), SCOPES.creating)) ? 'ready' : 'not-connected';
+}
+
+/**
+ * Closes the cards, creates the approved invoice with the approver's login, and tells the approver and
+ * the requester. Closing first means a second click or a replayed link finds the request decided.
+ */
 export async function finishApproval(approved: ApprovedInvoice): Promise<void> {
   const { pending, approver } = approved;
-  const approverDm = (await bot.openDM(approver.id)).id;
   const requesterIsApprover = pending.requester.id === approver.id;
-  await closeCards(pending, COPY.approved(approver.name));
+  let approverDm: string | undefined;
   try {
+    approverDm = (await bot.openDM(approver.id)).id;
+    if (!(await editCards(pending.cards, resolvedCard(pending, COPY.approved(approver.name))))) {
+      throw new Error('an approval card could not be closed');
+    }
     const result = await createInvoice(approved);
+    if (!result.ok) log.warn('invoice not created', { requestId: pending.requestId, problem: result.problem });
     const toApprover = result.ok ? COPY.created(result.number, pending.client.name, result.url) : COPY.notCreated(result.problem);
     await postTo(approverDm, toApprover, approver.name);
     if (requesterIsApprover) return;
     const toRequester = result.ok
       ? COPY.requestApproved(approver.name, result.number, pending.client.name, result.url)
-      : COPY.requestFailed(approver.name, result.problem);
+      : COPY.requestFailed(approver.name);
     await postTo(pending.requester.threadId, toRequester, approver.name);
   } catch (error: unknown) {
-    log.error('failed to create invoice', { requestId: pending.requestId, error });
-    await bot.thread(approverDm).post(COPY.somethingWrong);
+    log.error('failed to finish an approval', { requestId: pending.requestId, error });
+    if (approverDm) await bot.thread(approverDm).post(COPY.somethingWrong);
+    if (!requesterIsApprover) await postTo(pending.requester.threadId, COPY.requestFailed(approver.name), approver.name);
   }
-}
-
-/** Called by the login callback once an approver signs in: true if their login is now connected. */
-export async function approverConnected(approved: ApprovedInvoice): Promise<boolean> {
-  // This runs from a browser callback, not a Slack event, so the adapter isn't set up yet.
-  await bot.initialize();
-  return isConnected(forCreating(approved.approver.id), SCOPES.creating);
 }
 
 /** Sends the approver a sign-in button whose signed link carries the approval. */
@@ -205,8 +253,15 @@ async function askApproverToConnect(thread: NonNullable<ActionEvent['thread']>, 
   await thread.post(connectCard(url, 'own'));
 }
 
-// Approve and Decline carry the whole request. Only a finance admin, on a card Till posted, may press
-// them; anything else (stale or tampered) is ignored.
+async function decline({ pending, approver }: ApprovedInvoice): Promise<void> {
+  if (!(await allOpen(pending))) return;
+  await editCards(pending.cards, resolvedCard(pending, COPY.declined(approver.name)));
+  if (pending.requester.id === approver.id) return;
+  await postTo(pending.requester.threadId, COPY.requestDeclined(approver.name, pending.client.name), approver.name);
+}
+
+// Approve and Decline carry the whole request. Only a finance admin, on an open card Till posted, may
+// press them; anything else (stale, decided or tampered) is ignored.
 async function decide(event: ActionEvent, approve: boolean): Promise<void> {
   const pending = event.value ? decodePending(event.value) : null;
   const thread = event.thread;
@@ -221,22 +276,17 @@ async function decide(event: ActionEvent, approve: boolean): Promise<void> {
     log.warn('ignored an approval click', { reason: decision.ok ? 'no thread' : decision.reason, userId: clicker });
     return;
   }
-  const approver = { id: clicker, name: displayName(event.user) };
+  const approved: ApprovedInvoice = { pending, approver: { id: clicker, name: displayName(event.user) } };
   try {
     if (!approve) {
-      await closeCards(pending, COPY.declined(approver.name));
-      if (pending.requester.id !== approver.id) {
-        await postTo(pending.requester.threadId, COPY.requestDeclined(approver.name, pending.client.name), approver.name);
-      }
+      await decline(approved);
       return;
     }
-    const approved: ApprovedInvoice = { pending, approver };
+    const state = await checkApproval(approved);
+    if (state === 'ready') await finishApproval(approved);
     // Until the approver signs in, the cards keep their buttons, so the request is never stuck.
-    if (await isConnected(forCreating(approver.id), SCOPES.creating)) {
-      await finishApproval(approved);
-    } else {
-      await askApproverToConnect(thread, approved);
-    }
+    else if (state === 'not-connected') await askApproverToConnect(thread, approved);
+    else log.info('ignored an approval click', { reason: state, requestId: pending.requestId });
   } catch (error: unknown) {
     log.error('failed to handle an approval', { requestId: pending.requestId, error });
     await thread.post(COPY.somethingWrong);

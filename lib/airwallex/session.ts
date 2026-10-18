@@ -53,7 +53,8 @@ export function parseApiResponse(toolName: string, result: unknown): unknown {
   const { isError, content = [] } = (result ?? {}) as ToolResult;
   const text = content.map((part) => part.text ?? '').join('\n');
   const match = text.match(API_RESPONSE);
-  if (isError || !match) throw new Error(`Airwallex ${toolName} failed: ${text.slice(0, 300)}`);
+  // The response text can hold customer data, so it stays out of the error (and the logs).
+  if (isError || !match) throw new Error(`Airwallex ${toolName} failed${isError ? '' : ': no api response in the result'}`);
   return JSON.parse(match[1]);
 }
 

@@ -16,9 +16,7 @@ describe("Till's messages", () => {
   it('tell the requester the outcome and who decided', () => {
     expect(COPY.requestApproved('Alex', 'INV-1', 'Parkside', '')).toBe('Alex approved your request. Created invoice INV-1 for Parkside.');
     expect(COPY.requestDeclined('Alex', 'Parkside')).toBe('Alex declined your invoice request for Parkside.');
-    expect(COPY.requestFailed('Alex', 'No such client.')).toBe(
-      "Alex approved your request, but I didn't create the invoice. No such client.",
-    );
+    expect(COPY.requestFailed('Alex')).toBe("Alex approved your request, but I didn't create the invoice. Alex has the details.");
   });
 
   it('keep names from acting as Slack markup', () => {
@@ -26,7 +24,7 @@ describe("Till's messages", () => {
   });
 
   it('fill in names, terms and the footer', () => {
-    expect(COPY.card.requestedBy('Sam')).toBe('Requested by Sam. Approving creates it with your own Airwallex login.');
+    expect(COPY.card.requestedBy('<@UMEMBER001>')).toBe('Requested by <@UMEMBER001>. Approving creates it with your own Airwallex login.');
     expect(COPY.approved('Alex')).toBe('Approved by Alex.');
     expect(COPY.declined('Alex')).toBe('Declined by Alex.');
     expect(COPY.notCreated('No such client.')).toBe("I didn't create the invoice. No such client.");

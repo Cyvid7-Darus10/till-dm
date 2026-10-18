@@ -13,8 +13,8 @@ export const pending: PendingInvoice = {
   requestId: 'till-1792068287.429589',
   requester: { id: 'UMEMBER001', name: 'Sam Ortiz', threadId: 'slack:D0SAM00001:' },
   cards: [
-    { threadId: 'slack:D0ALEX0001:', messageId: '1792068290.000100' },
-    { threadId: 'slack:D0JO000001:', messageId: '1792068290.000200' },
+    { channel: 'D0ALEX0001', messageId: '1792068290.000100' },
+    { channel: 'D0JO000001', messageId: '1792068290.000200' },
   ],
 };
 

@@ -5,7 +5,7 @@ import { openAirwallex } from '../airwallex/session';
 import { CREATE_TOOLS_FOR_MODEL, SCOPES } from '../airwallex/tool-policy';
 import { config } from '../config';
 import { checkCreatedInvoice } from '../invoices/check';
-import { type ApprovedInvoice, formatAmount, type InvoiceRequest, invoiceRequestSchema } from '../invoices/request';
+import { type ApprovedInvoice, type InvoiceRequest, invoiceRequestSchema } from '../invoices/request';
 import { log } from '../log';
 import { answerInstructions, createInstructions, LOCAL_TOOL } from './instructions';
 
@@ -79,13 +79,14 @@ export async function createInvoice({ pending, approver }: ApprovedInvoice): Pro
     const result = await generateText({
       ...modelSettings(),
       system: createInstructions(pending.requestId, pending.client.id),
-      prompt: [
-        `Client: ${pending.client.name}`,
-        `Line item: ${request.description}`,
-        `Amount: ${formatAmount(request)} (${request.amount} in major units)`,
-        `Currency: ${request.currency}`,
-        `Days until due: ${request.daysUntilDue}`,
-      ].join('\n'),
+      // JSON keeps the requester's free text (the line item) clearly separate from the instructions.
+      prompt: JSON.stringify({
+        client: pending.client.name,
+        lineItem: request.description,
+        amount: request.amount,
+        currency: request.currency,
+        daysUntilDue: request.daysUntilDue,
+      }),
       tools: {
         ...pick(airwallex.tools, CREATE_TOOLS_FOR_MODEL),
         [LOCAL_TOOL.reportInvoice]: tool({ description: 'Report the finished invoice.', inputSchema: reportSchema }),

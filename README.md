@@ -61,7 +61,9 @@ conversions, simulations) are never loaded for any login.
 3. Till sends an approval card to each admin's DM and tells the requester who it asked. If an admin
    asks for an invoice, the card goes only to that admin.
 4. An admin presses Approve or Decline. The server checks that the clicker is an admin and that the
-   button belongs to a card Till posted for this request. The first decision closes every card.
+   button belongs to a card Till posted for this request. It then reads the cards back from Slack: if
+   one has lost its buttons, someone already decided, and the click does nothing. The first decision
+   closes every card.
 5. On Approve, Till creates the invoice with the approving admin's own Airwallex login. If that admin
    has not connected Airwallex yet, Till sends them a sign-in button first, and creates the invoice as
    soon as they finish signing in. Until then, the cards keep their buttons, so another admin can
@@ -76,7 +78,8 @@ or two admins approving at once, cannot create a second invoice.
 The sign-in button's link back to Till is a short-lived token signed by
 [Vercel KMS](https://vercel.com/docs/kms). It carries the approval, so following it creates the
 invoice. The signing key never leaves Vercel, so the link cannot be forged, and it expires after 15
-minutes.
+minutes. Before it creates anything, Till checks again that the approver is still an admin and that
+the cards are still open, so the link does nothing once the request is decided.
 
 To take someone's access away, remove them from the member or admin list and redeploy. To cut off an
 admin's Airwallex access at once, revoke their grant in Vercel Connect.
@@ -178,9 +181,11 @@ Vercel Connect saves logins per environment. `check-logins` reports on the envir
   a live account.
 - Till keeps no state between requests. It drops Slack's duplicate deliveries by message type, not by
   a stored ID. Add a state adapter such as Redis before you run several instances.
+- The cards in Slack are the only lock. Two admins who press opposite buttons in the same second can
+  both act. The shared `request_id` still stops a second invoice.
 - Till reads the last 20 messages of a DM for context, not a separate conversation per topic.
 - At most five admins, because each approval card lists every card in its button value, and Slack
-  limits that value's size.
+  limits that value's size. A request too long to fit is refused before any card goes out.
 - The invoice check covers client, currency, amount and status. It does not check line items or the
   due date.
 - Client lookup reads the first 100 Airwallex clients. With more than that, Till accepts only a

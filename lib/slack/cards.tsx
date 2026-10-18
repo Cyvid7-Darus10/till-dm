@@ -40,7 +40,7 @@ export function approvalCard(pending: PendingInvoice): CardElement {
   return asElement(
     <Card title={COPY.card.title(pending.client.name)}>
       {InvoiceFields({ pending })}
-      <CardText style="muted">{COPY.card.requestedBy(pending.requester.name)}</CardText>
+      <CardText style="muted">{COPY.card.requestedBy(`<@${pending.requester.id}>`)}</CardText>
       <Actions>
         <Button id={ACTIONS.approve} style="primary" value={value}>
           {COPY.card.approve}
