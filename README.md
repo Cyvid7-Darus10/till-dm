@@ -53,6 +53,22 @@ conversions, simulations) are never loaded for any login.
 
 ## How an invoice request works
 
+```mermaid
+sequenceDiagram
+    actor Sam as Sam (member)
+    participant Till
+    actor Alex as Alex (admin)
+    participant AWX as Airwallex
+    Sam->>Till: DM: invoice Parkside Dental 3,950 USD, net 30
+    Till->>AWX: Find the client (team login, view only)
+    Till->>Alex: DM: approval card
+    Till->>Sam: I've asked Alex
+    Alex->>Till: Approve
+    Till->>AWX: Create and check the invoice (Alex's own login)
+    Till->>Alex: Created INV-0042
+    Till->>Sam: Alex approved. Created INV-0042
+```
+
 1. A member asks for an invoice in their DM. The model pulls out the client, amount, currency, terms
    and line item. The requester's name comes from Slack, never from the model.
 2. Till's code, not the model, finds the Airwallex client. An exact name wins. Otherwise the name must
