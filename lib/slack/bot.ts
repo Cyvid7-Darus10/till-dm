@@ -45,6 +45,12 @@ const slack = () => bot.getAdapter('slack');
 
 const displayName = (author: Author): string => author.fullName || author.userName;
 
+/** Button clicks carry only the Slack handle, so the approver's real name comes from their profile. */
+async function approverName(author: Author): Promise<string> {
+  const profile = await slack().getUser(author.userId);
+  return profile?.fullName || displayName(author);
+}
+
 /** Recent messages in this DM, with each person's name in front, for the model. */
 async function dmHistory(thread: Thread) {
   const { messages } = await slack().fetchChannelMessages(thread.channelId, { limit: config.historyLimit });
@@ -277,8 +283,8 @@ async function decide(event: ActionEvent, approve: boolean): Promise<void> {
     log.warn('ignored an approval click', { reason: decision.ok ? 'no thread' : decision.reason, userId: clicker });
     return;
   }
-  const approved: ApprovedInvoice = { pending, approver: { id: clicker, name: displayName(event.user) } };
   try {
+    const approved: ApprovedInvoice = { pending, approver: { id: clicker, name: await approverName(event.user) } };
     if (!approve) {
       await decline(approved);
       return;
