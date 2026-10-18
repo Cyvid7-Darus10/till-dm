@@ -18,6 +18,11 @@ describe('slack deliveries', () => {
     expect(reason).toMatch(/channel message/);
   });
 
+  it.each(['channel', 'group', 'mpim'])('drops every %s message before it reaches Till', async (channelType) => {
+    const reason = await duplicateReason(json({ event: { type: 'message', channel_type: channelType } }));
+    expect(reason).not.toBeNull();
+  });
+
   it('handles direct messages', async () => {
     expect(await duplicateReason(json({ event: { type: 'message', channel_type: 'im' } }))).toBeNull();
   });

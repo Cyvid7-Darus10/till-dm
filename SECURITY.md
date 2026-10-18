@@ -10,6 +10,7 @@ Include what you found, how to reproduce it, and what an attacker could do with 
 ## What Till is designed to prevent
 
 - Anyone outside the finance member and admin lists reading finance data.
+- Finance data being posted in a channel or group DM.
 - Anyone who is not a finance admin approving or creating anything in Airwallex.
 - An approval button being reused on another message, or an approval link being forged.
 - The model calling tools that move money, whatever a message or an Airwallex record says.

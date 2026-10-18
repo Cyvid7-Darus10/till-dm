@@ -45,6 +45,12 @@ Two settings define the team: `TILL_FINANCE_MEMBER_SLACK_IDS` and `TILL_FINANCE_
 Admins count as members. If someone mentions `@Till` in a channel, Till asks them to send a DM instead
 and shares nothing there.
 
+Two checks keep answers out of channels. `lib/slack/events.ts` drops every message that isn't from a
+one-to-one DM before Till sees it. The answering code in `lib/slack/bot.ts` also refuses any
+conversation that isn't a DM, so a misrouted event still can't reach finance data. A mention in a
+channel only gets a fixed reply, without reading Airwallex or calling the model.
+`tests/slack/channel-safety.test.ts` covers each case.
+
 Airwallex enforces the first limit. The team login is granted only view scopes, so Airwallex refuses
 any write it attempts. Admin logins add the billing edit scopes and nothing else.
 

@@ -165,7 +165,16 @@ async function noAccess(thread: Thread, author: Author): Promise<void> {
   await thread.post(connectCard(url, 'team'));
 }
 
-bot.onDirectMessage(async (thread, message) => {
+/**
+ * Answers a DM. It checks for itself that the conversation is a one-to-one DM, so finance data can't
+ * reach a channel or group DM even if an event is ever routed here by mistake.
+ */
+export async function handleDirectMessage(thread: Thread, message: Message): Promise<void> {
+  if (!thread.isDM) {
+    log.warn('refused to answer outside a DM', { threadId: thread.id });
+    await thread.post(COPY.dmOnly);
+    return;
+  }
   const author = message.author;
   if (!isFinanceMember(author.userId)) {
     log.info('turned away a DM from outside the finance team', { userId: author.userId });
@@ -188,12 +197,15 @@ bot.onDirectMessage(async (thread, message) => {
     log.error('failed to answer a DM', { threadId: thread.id, error });
     await thread.post(COPY.somethingWrong);
   }
-});
+}
 
-// In a channel, everyone would read the answer, so Till points people to a DM instead.
-bot.onNewMention(async (thread) => {
+/** In a channel, everyone would read the answer, so Till points people to a DM and reads nothing. */
+export async function handleMention(thread: Thread): Promise<void> {
   await thread.post(COPY.dmOnly);
-});
+}
+
+bot.onDirectMessage(handleDirectMessage);
+bot.onNewMention(handleMention);
 
 /** True once the shared team login is connected. Called by the login callback. */
 export async function teamLoginConnected(): Promise<boolean> {
