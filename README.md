@@ -216,4 +216,5 @@ Vercel Connect saves logins per environment. `check-logins` reports on the envir
 
 ## License
 
-MIT
+Apache License 2.0. If you use or adapt this code, keep the [NOTICE](NOTICE) file, which credits
+Cyrus David Pastelero, as the license requires. See [LICENSE](LICENSE).

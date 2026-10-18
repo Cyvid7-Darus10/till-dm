@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Till in DMs: a private finance agent in Slack. The finance team asks, an admin approves, and Airwallex logins stay in Vercel Connect.",
   "private": true,
-  "license": "MIT",
+  "license": "Apache-2.0",
   "type": "module",
   "engines": {
     "node": ">=22"
