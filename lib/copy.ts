@@ -9,7 +9,7 @@ const createdLink = (url: string): string => {
 export const COPY = {
   notOnTeam: 'I only work with the finance team. Ask a finance admin to add you.',
   dmOnly: 'I work in direct messages, so finance details stay private. Send me a DM.',
-  noAccess: "I don't have access to our finances yet.",
+  noAccess: "I don't have access to our finances yet. A finance admin needs to connect Airwallex.",
   somethingWrong: 'Something went wrong on my side. Try again in a moment.',
   teamLoginLabel: 'team login',
   footer: (who: string) => `Airwallex: ${plainText(who)}`,
@@ -45,7 +45,7 @@ export const COPY = {
   connect: {
     own: {
       title: 'Connect your Airwallex',
-      body: 'Approving creates the invoice with your own Airwallex login. Sign in once and I create it right after.',
+      body: "Approving creates the invoice with your own Airwallex login. Sign in once and I'll create it right after.",
     },
     team: {
       title: "Connect the team's Airwallex",

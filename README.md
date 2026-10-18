@@ -24,7 +24,7 @@ DM: Sam and Till
 
 DM: Alex and Till
   Till  [Invoice Parkside Dental Group]  Website redesign · USD 3,950.00 · Net 30
-        Requested by Sam. Approving creates it with your own Airwallex login.
+        Requested by @Sam. Approving creates it with your own Airwallex login.
         (Approve) (Decline)
   Alex  presses Approve
   Till  Created invoice INV-0042 for Parkside Dental Group. Open invoice
@@ -90,11 +90,10 @@ sequenceDiagram
    what was approved. If anything differs, Till voids the invoice.
 7. Till tells the admin and the requester the result, with a link to the invoice.
 
-Every request has one Airwallex `request_id`, taken from the requester's Slack message, and Till tells
-the model to use it. Airwallex treats a repeat with the same `request_id` as the same invoice, so a
-double click, or two admins approving at once, should not create a second one. The model makes the
-create calls, so this relies on it passing that id through; the read-back check catches a wrong client,
-currency, amount or status, but not a wrong due date or line item.
+Every request has one Airwallex `request_id`, taken from the requester's Slack message. Airwallex treats
+a repeat with the same `request_id` as the same invoice, so a double click, or two admins approving at
+once, should not create a second one. The model makes the create calls, so this relies on it passing
+the id through.
 
 The sign-in button's link back to Till is a short-lived token signed by
 [Vercel KMS](https://vercel.com/docs/kms). It carries the approval, so following it creates the
@@ -162,8 +161,9 @@ You need a Vercel team with Vercel Connect and Vercel KMS, a Slack workspace whe
 apps, and an Airwallex sandbox account.
 
 1. Deploy this repository to Vercel as a new project. It needs Node 22 or later.
-2. In the project, open Connect and add a Slack connector named `slack/till-dm`. Turn on trigger
-   forwarding to `/api/webhooks/slack` and install the app in your workspace.
+2. In the project, open Connect and add a Slack connector named `slack/till-dm`, with triggers turned
+   on. Install it in your workspace. Then, from this folder, send Slack's events to Till:
+   `vercel connect attach slack/till-dm --triggers --trigger-path /api/webhooks/slack`.
 3. Add an MCP connector for `https://mcp.sandbox.airwallex.com/developer` named
    `airwallex/till-sandbox`, or attach an existing one.
 4. In Team Settings, open Key Management. Create an ES256 issuer, add a grant for this project and
