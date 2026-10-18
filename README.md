@@ -7,6 +7,8 @@ finance admins, and an admin approves it with one click.
 Till reads and writes through the Airwallex MCP server. [Vercel Connect](https://vercel.com/docs/connect)
 holds every login, to Slack and to Airwallex, so the project has no API keys or tokens of its own.
 
+![Till in DMs: Sam asks privately, requests an invoice, Alex approves in her own DM, and Sam hears back](docs/demo.gif)
+
 This is the direct-message version of [Till](https://github.com/Cyvid7-Darus10/till), which works in a
 shared channel. In DMs, only the person who asked sees the answer.
 
