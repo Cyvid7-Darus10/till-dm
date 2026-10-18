@@ -264,7 +264,8 @@ async function decline({ pending, approver }: ApprovedInvoice): Promise<void> {
   if (!(await allOpen(pending))) return;
   await editCards(pending.cards, resolvedCard(pending, COPY.declined(approver.name)));
   if (pending.requester.id === approver.id) return;
-  await postTo(pending.requester.threadId, COPY.requestDeclined(approver.name, pending.client.name), approver.name);
+  // No Airwallex login was used, so the message has no login caption.
+  await bot.thread(pending.requester.threadId).post(COPY.requestDeclined(approver.name, pending.client.name));
 }
 
 // Approve and Decline carry the whole request. Only a finance admin, on an open card Till posted, may
