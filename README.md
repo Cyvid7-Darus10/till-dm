@@ -90,8 +90,11 @@ sequenceDiagram
    what was approved. If anything differs, Till voids the invoice.
 7. Till tells the admin and the requester the result, with a link to the invoice.
 
-Every request has one Airwallex `request_id`, taken from the requester's Slack message. A double click,
-or two admins approving at once, cannot create a second invoice.
+Every request has one Airwallex `request_id`, taken from the requester's Slack message, and Till tells
+the model to use it. Airwallex treats a repeat with the same `request_id` as the same invoice, so a
+double click, or two admins approving at once, should not create a second one. The model makes the
+create calls, so this relies on it passing that id through; the read-back check catches a wrong client,
+currency, amount or status, but not a wrong due date or line item.
 
 The sign-in button's link back to Till is a short-lived token signed by
 [Vercel KMS](https://vercel.com/docs/kms). It carries the approval, so following it creates the
@@ -126,6 +129,7 @@ app/api/airwallex/connected/  The page the Airwallex sign-in returns to
 lib/slack/        The conversation
   bot.ts            Answer a DM, send approval cards, decide, create
   cards.tsx         Replies, approval cards and sign-in buttons
+  card-state.ts     Tells whether a card is still open (has its buttons)
   events.ts         Drops Slack's duplicate deliveries
   text.ts           Keeps names and model output from acting as Slack markup
 
@@ -200,7 +204,7 @@ Vercel Connect saves logins per environment. `check-logins` reports on the envir
 - Till keeps no state between requests. It drops Slack's duplicate deliveries by message type, not by
   a stored ID. Add a state adapter such as Redis before you run several instances.
 - The cards in Slack are the only lock. Two admins who press opposite buttons in the same second can
-  both act. The shared `request_id` still stops a second invoice.
+  both act. The shared `request_id` should still stop a second invoice.
 - Till reads the last 20 messages of a DM for context, not a separate conversation per topic.
 - At most five admins, because each approval card lists every card in its button value, and Slack
   limits that value's size. A request too long to fit is refused before any card goes out.

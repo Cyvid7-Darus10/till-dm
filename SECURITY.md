@@ -21,3 +21,7 @@ Include what you found, how to reproduce it, and what an attacker could do with 
 
 Every finance member can read everything the shared team login can see. Slack keeps DMs, and workspace
 owners on some plans can export them. The README section "Privacy" explains how to limit that.
+
+The sign-in link is signed, not encrypted. Its URL carries the approved invoice's client, amount, line
+item and Slack user ids, so anything that logs URLs (Vercel request logs, browser history) can see them.
+Anyone holding the link in its 15 minutes can only trigger the invoice the admin already approved.

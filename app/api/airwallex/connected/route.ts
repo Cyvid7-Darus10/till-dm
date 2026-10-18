@@ -44,7 +44,7 @@ const PAGE_HEADERS = {
   'cache-control': 'no-store',
   'referrer-policy': 'no-referrer',
   'x-content-type-options': 'nosniff',
-  'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'",
+  'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'",
 };
 
 /** A minimal branded page. `message` is always one of Till's own strings, never user input. */
